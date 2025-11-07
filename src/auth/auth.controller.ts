@@ -82,7 +82,7 @@ export class AuthController {
         roleId: '${user.roleId ?? ''}',
         dayOfBirth: '${user.dayOfBirth ?? ''}',
         lastLogin: '${user.lastLogin ?? ''}'
-      }, 'http://localhost:3001');
+      }, 'https://itzenops.vercel.app');
       window.close();
     </script>
   `;
