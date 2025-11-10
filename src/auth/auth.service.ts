@@ -1,28 +1,27 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
 import { AdminsService } from '../admins/admins.service';
 import * as argon2 from 'argon2';
 import * as jwt from 'jsonwebtoken';
-
+import { AdminDocument } from '../admins/admins.schema';
 
 @Injectable()
 export class AuthService {
-  constructor(
-    private adminService: AdminsService,
-    private jwtService: JwtService
-  ) {}
+  constructor(private adminService: AdminsService) {}
+
   private readonly secret = process.env.JWT_SECRET as string;
 
-  async validateAdmin(username: string, password: string): Promise<string> {
+  // ✅ Xác thực admin và trả về thông tin để lưu vào session
+  async validateAdmin(username: string, password: string): Promise<AdminDocument> {
     const admin = await this.adminService.findByUsername(username);
     if (!admin) throw new UnauthorizedException('Admin not found');
 
     const isMatch = await argon2.verify(admin.password, password);
     if (!isMatch) throw new UnauthorizedException('Invalid password');
 
-    const payload = { sub: admin._id, username: admin.username };
-    return this.jwtService.sign(payload);
+    return admin;
   }
+
+  // ✅ Dùng cho xác thực token Google OAuth nếu cần
   async verifyToken(token: string): Promise<boolean> {
     try {
       jwt.verify(token, this.secret);
@@ -31,5 +30,4 @@ export class AuthService {
       return false;
     }
   }
-
 }
