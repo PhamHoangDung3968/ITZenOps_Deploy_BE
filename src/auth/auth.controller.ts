@@ -184,7 +184,7 @@ export class AuthController {
           username: '${user.name}',
           email: '${user.email}',
           roleId: '${user.roleId ?? ''}'
-        }, 'https://itzenops.vercel.app');
+        }, 'https://itzenops.vercel.app/');
         window.close();
       </script>
     `;

@@ -17,51 +17,58 @@ const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./auth.service");
 const create_admin_dto_1 = require("../admins/dto/create-admin.dto");
 const passport_1 = require("@nestjs/passport");
-const jwt_1 = require("@nestjs/jwt");
 let AuthController = class AuthController {
     authService;
-    jwtService;
-    constructor(authService, jwtService) {
+    constructor(authService) {
         this.authService = authService;
-        this.jwtService = jwtService;
     }
-    async login(dto) {
-        const token = await this.authService.validateAdmin(dto.username, dto.password);
-        return { access_token: token };
+    async login(dto, req, res) {
+        const admin = await this.authService.validateAdmin(dto.username, dto.password);
+        req.session.admin = {
+            id: admin._id.toString(),
+            username: admin.username,
+            role: 'admin',
+        };
+        return res.json({ message: 'Đăng nhập admin thành công' });
     }
-    async verify(authHeader) {
-        if (!authHeader)
-            throw new common_1.UnauthorizedException('Missing token');
-        const token = authHeader.replace('Bearer ', '');
-        const isValid = await this.authService.verifyToken(token);
-        if (!isValid)
-            throw new common_1.UnauthorizedException('Invalid or expired token');
-        return { message: 'Token is valid' };
+    async verify(req) {
+        if (req.session.admin) {
+            return { type: 'admin', user: req.session.admin };
+        }
+        if (req.session.user) {
+            return { type: 'user', user: req.session.user };
+        }
+        throw new common_1.UnauthorizedException('Chưa đăng nhập');
+    }
+    logout(req, res) {
+        req.session.destroy(() => { });
+        res.clearCookie('connect.sid');
+        return res.json({ message: 'Đã đăng xuất' });
     }
     async googleAuth() {
     }
     async googleAuthRedirect(req, res) {
         const user = req.user;
-        const token = this.jwtService.sign({
-            sub: user._id,
+        req.session.user = {
+            id: user._id.toString(),
             email: user.email,
             username: user.name,
-            role: user.roleId,
-        });
+            roleId: user.roleId?.toString() ?? '',
+            sex: user.sex ?? '',
+            dayOfBirth: user.dayOfBirth?.toString() ?? '',
+            lastLogin: user.lastLogin?.toString() ?? '',
+        };
         const html = `
-    <script>
-      window.opener.postMessage({
-        access_token: '${token}',
-        username: '${user.name}',
-        email: '${user.email}',
-        sex: '${user.sex ?? ''}',
-        roleId: '${user.roleId ?? ''}',
-        dayOfBirth: '${user.dayOfBirth ?? ''}',
-        lastLogin: '${user.lastLogin ?? ''}'
-      }, 'http://localhost:3001');
-      window.close();
-    </script>
-  `;
+      <script>
+        window.opener.postMessage({
+          message: 'Đăng nhập Google thành công!',
+          username: '${user.name}',
+          email: '${user.email}',
+          roleId: '${user.roleId ?? ''}'
+        }, 'http://localhost:3001');
+        window.close();
+      </script>
+    `;
         res.send(html);
     }
 };
@@ -69,17 +76,27 @@ exports.AuthController = AuthController;
 __decorate([
     (0, common_1.Post)('login'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Req)()),
+    __param(2, (0, common_1.Res)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_admin_dto_1.CreateAdminDto]),
+    __metadata("design:paramtypes", [create_admin_dto_1.CreateAdminDto, Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
     (0, common_1.Get)('verify'),
-    __param(0, (0, common_1.Headers)('authorization')),
+    __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "verify", null);
+__decorate([
+    (0, common_1.Post)('logout'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "logout", null);
 __decorate([
     (0, common_1.Get)('google'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google')),
@@ -98,7 +115,6 @@ __decorate([
 ], AuthController.prototype, "googleAuthRedirect", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService,
-        jwt_1.JwtService])
+    __metadata("design:paramtypes", [auth_service_1.AuthService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

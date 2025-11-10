@@ -1,10 +1,9 @@
-import { JwtService } from '@nestjs/jwt';
 import { AdminsService } from '../admins/admins.service';
+import { AdminDocument } from '../admins/admins.schema';
 export declare class AuthService {
     private adminService;
-    private jwtService;
-    constructor(adminService: AdminsService, jwtService: JwtService);
+    constructor(adminService: AdminsService);
     private readonly secret;
-    validateAdmin(username: string, password: string): Promise<string>;
+    validateAdmin(username: string, password: string): Promise<AdminDocument>;
     verifyToken(token: string): Promise<boolean>;
 }

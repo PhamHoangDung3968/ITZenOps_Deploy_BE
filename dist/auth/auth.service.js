@@ -44,16 +44,13 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
-const jwt_1 = require("@nestjs/jwt");
 const admins_service_1 = require("../admins/admins.service");
 const argon2 = __importStar(require("argon2"));
 const jwt = __importStar(require("jsonwebtoken"));
 let AuthService = class AuthService {
     adminService;
-    jwtService;
-    constructor(adminService, jwtService) {
+    constructor(adminService) {
         this.adminService = adminService;
-        this.jwtService = jwtService;
     }
     secret = process.env.JWT_SECRET;
     async validateAdmin(username, password) {
@@ -63,8 +60,7 @@ let AuthService = class AuthService {
         const isMatch = await argon2.verify(admin.password, password);
         if (!isMatch)
             throw new common_1.UnauthorizedException('Invalid password');
-        const payload = { sub: admin._id, username: admin.username };
-        return this.jwtService.sign(payload);
+        return admin;
     }
     async verifyToken(token) {
         try {
@@ -79,7 +75,6 @@ let AuthService = class AuthService {
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [admins_service_1.AdminsService,
-        jwt_1.JwtService])
+    __metadata("design:paramtypes", [admins_service_1.AdminsService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

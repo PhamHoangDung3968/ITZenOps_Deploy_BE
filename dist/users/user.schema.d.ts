@@ -1,5 +1,4 @@
 import { Document, Types } from 'mongoose';
-import { Role } from '../roles/roles.schema';
 export type UserDocument = User & Document;
 export declare class User {
     name: string;
@@ -10,7 +9,7 @@ export declare class User {
     status: number;
     lastLogin: Date;
     sex: string | null;
-    roleId: Role | Types.ObjectId;
+    roleId: Types.ObjectId;
 }
 export declare const UserSchema: import("mongoose").Schema<User, import("mongoose").Model<User, any, any, any, Document<unknown, any, User, any, {}> & User & {
     _id: Types.ObjectId;
