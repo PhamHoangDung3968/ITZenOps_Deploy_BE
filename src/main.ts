@@ -1,16 +1,3 @@
-// import { NestFactory } from '@nestjs/core';
-// import { AppModule } from './app.module';
-
-// async function bootstrap() {
-//   const app = await NestFactory.create(AppModule);
-//   app.enableCors();
-//   await app.listen(process.env.PORT ?? 3000);
-// }
-// bootstrap();
-
-
-
-
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import session from 'express-session';
@@ -28,15 +15,15 @@ async function bootstrap() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        secure: false, // true nếu dùng HTTPS
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
+        secure: process.env.NODE_ENV === 'production', // ✅ bật khi deploy
+        sameSite: 'lax', // ✅ phù hợp với Google login
+        maxAge: 7 * 24 * 60 * 60 * 1000,
       },
     }),
   );
 
   app.enableCors({
-    origin: 'https://itzenops.vercel.app/',
+    origin: 'https://itzenops.vercel.app', // ✅ không có dấu /
     credentials: true,
   });
 
