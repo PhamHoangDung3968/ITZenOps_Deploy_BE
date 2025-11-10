@@ -28,15 +28,15 @@ async function bootstrap() {
       saveUninitialized: false,
       cookie: {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
+        secure: false, // true nếu dùng HTTPS
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 ngày
       },
     }),
   );
 
   app.enableCors({
-    origin: 'https://itzenops.vercel.app',
+    origin: 'https://itzenops.vercel.app/',
     credentials: true,
   });
 

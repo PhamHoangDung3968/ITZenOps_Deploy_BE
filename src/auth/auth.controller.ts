@@ -114,7 +114,7 @@ import { Types } from 'mongoose';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) {}
+  constructor(private authService: AuthService) { }
 
   // ✅ Đăng nhập bằng username/password cho admin
   @Post('login')
@@ -149,7 +149,7 @@ export class AuthController {
   // ✅ Đăng xuất
   @Post('logout')
   logout(@Req() req: Request, @Res() res: Response) {
-    req.session.destroy(() => {});
+    req.session.destroy(() => { });
     res.clearCookie('connect.sid');
     return res.json({ message: 'Đã đăng xuất' });
   }
@@ -189,5 +189,15 @@ export class AuthController {
       </script>
     `;
     res.send(html);
+  }
+  @Get('verify-google')
+  async verifyGoogle(@Req() req: Request) {
+    if (req.session.user) {
+      return {
+        message: 'Đã đăng nhập bằng Google',
+        user: req.session.user,
+      };
+    }
+    throw new UnauthorizedException('Chưa đăng nhập bằng Google');
   }
 }
