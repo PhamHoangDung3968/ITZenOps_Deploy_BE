@@ -36,7 +36,7 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: 'https://itzenops.vercel.app/',
+    origin: 'https://itzenops.vercel.app',
     credentials: true,
   });
 
