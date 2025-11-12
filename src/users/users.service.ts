@@ -6,7 +6,7 @@ import { User, UserDocument } from './user.schema';
 
 @Injectable()
 export class UsersService {
-    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+    constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) { }
     async createUser(name: string, email: string, age?: number): Promise<User> {
         const newUser = new this.userModel({ name, email, age });
         return newUser.save();
@@ -17,5 +17,16 @@ export class UsersService {
     // async createManyUsers(users: { name: string; email: string; age?: number }[]): Promise<User[]> {
     //     return this.userModel.insertMany(users);
     // }
-    
+    async updateProfile(userId: string, updates: Partial<User>): Promise<User> {
+        await this.userModel.findByIdAndUpdate(userId, updates);
+        const updatedUser = await this.userModel.findById(userId).exec();
+
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+
+        return updatedUser;
+    }
+
+
 }
