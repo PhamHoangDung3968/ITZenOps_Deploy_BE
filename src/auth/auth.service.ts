@@ -1,33 +1,53 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { AdminsService } from '../admins/admins.service';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { User, UserDocument } from '../users/user.schema';
 import * as argon2 from 'argon2';
-import * as jwt from 'jsonwebtoken';
-import { AdminDocument } from '../admins/admins.schema';
 
 @Injectable()
 export class AuthService {
-  constructor(private adminService: AdminsService) {}
+  constructor(
+    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+  ) {}
 
-  private readonly secret = process.env.JWT_SECRET as string;
-
-  // ✅ Xác thực admin và trả về thông tin để lưu vào session
-  async validateAdmin(username: string, password: string): Promise<AdminDocument> {
-    const admin = await this.adminService.findByUsername(username);
-    if (!admin) throw new UnauthorizedException('Admin not found');
-
-    const isMatch = await argon2.verify(admin.password, password);
-    if (!isMatch) throw new UnauthorizedException('Invalid password');
-
-    return admin;
-  }
-
-  // ✅ Dùng cho xác thực token Google OAuth nếu cần
-  async verifyToken(token: string): Promise<boolean> {
-    try {
-      jwt.verify(token, this.secret);
-      return true;
-    } catch (err) {
-      return false;
+  async validateUser(username: string, password: string) {
+    // 🔍 Tìm người dùng theo username
+    const user = await this.userModel.findOne({ username });
+    if (!user) {
+      throw new UnauthorizedException('Tài khoản không tồn tại');
     }
+
+    // 🔒 Kiểm tra mật khẩu có tồn tại không (tránh tài khoản Google)
+    if (!user.password) {
+      throw new UnauthorizedException('Tài khoản không có mật khẩu');
+    }
+
+    // 🔐 So sánh mật khẩu đã hash
+    const isValid = await argon2.verify(user.password, password);
+    if (!isValid) {
+      throw new UnauthorizedException('Sai mật khẩu');
+    }
+
+    // ✅ Chỉ cho phép đăng nhập nếu role là đặc biệt
+    const allowedRoleId = '690ac7fd9504cedae759735e';
+    if (String(user.roleId) !== allowedRoleId) {
+      throw new UnauthorizedException('Không có quyền đăng nhập bằng tài khoản thường');
+    }
+
+    // 🕒 Cập nhật thời gian đăng nhập
+    user.lastLogin = new Date();
+    await user.save();
+
+    // ✅ Trả về thông tin người dùng
+    return {
+      _id: user._id,
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      roleId: user.roleId,
+      sex: user.sex,
+      dayOfBirth: user.dayOfBirth,
+      lastLogin: user.lastLogin,
+    };
   }
 }

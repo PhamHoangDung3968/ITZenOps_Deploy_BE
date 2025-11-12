@@ -5,6 +5,4 @@ export declare class UsersService {
     constructor(userModel: Model<UserDocument>);
     createUser(name: string, email: string, age?: number): Promise<User>;
     getAllUsers(): Promise<User[]>;
-    findUserById(id: string): Promise<User>;
-    update(id: string, data: Partial<User>): Promise<User>;
 }

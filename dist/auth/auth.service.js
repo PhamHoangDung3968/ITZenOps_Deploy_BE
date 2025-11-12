@@ -41,40 +41,55 @@ var __importStar = (this && this.__importStar) || (function () {
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __param = (this && this.__param) || function (paramIndex, decorator) {
+    return function (target, key) { decorator(target, key, paramIndex); }
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
-const admins_service_1 = require("../admins/admins.service");
+const mongoose_1 = require("@nestjs/mongoose");
+const mongoose_2 = require("mongoose");
+const user_schema_1 = require("../users/user.schema");
 const argon2 = __importStar(require("argon2"));
-const jwt = __importStar(require("jsonwebtoken"));
 let AuthService = class AuthService {
-    adminService;
-    constructor(adminService) {
-        this.adminService = adminService;
+    userModel;
+    constructor(userModel) {
+        this.userModel = userModel;
     }
-    secret = process.env.JWT_SECRET;
-    async validateAdmin(username, password) {
-        const admin = await this.adminService.findByUsername(username);
-        if (!admin)
-            throw new common_1.UnauthorizedException('Admin not found');
-        const isMatch = await argon2.verify(admin.password, password);
-        if (!isMatch)
-            throw new common_1.UnauthorizedException('Invalid password');
-        return admin;
-    }
-    async verifyToken(token) {
-        try {
-            jwt.verify(token, this.secret);
-            return true;
+    async validateUser(username, password) {
+        const user = await this.userModel.findOne({ username });
+        if (!user) {
+            throw new common_1.UnauthorizedException('Tài khoản không tồn tại');
         }
-        catch (err) {
-            return false;
+        if (!user.password) {
+            throw new common_1.UnauthorizedException('Tài khoản không có mật khẩu');
         }
+        const isValid = await argon2.verify(user.password, password);
+        if (!isValid) {
+            throw new common_1.UnauthorizedException('Sai mật khẩu');
+        }
+        const allowedRoleId = '690ac7fd9504cedae759735e';
+        if (String(user.roleId) !== allowedRoleId) {
+            throw new common_1.UnauthorizedException('Không có quyền đăng nhập bằng tài khoản thường');
+        }
+        user.lastLogin = new Date();
+        await user.save();
+        return {
+            _id: user._id,
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            roleId: user.roleId,
+            sex: user.sex,
+            dayOfBirth: user.dayOfBirth,
+            lastLogin: user.lastLogin,
+        };
     }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [admins_service_1.AdminsService])
+    __param(0, (0, mongoose_1.InjectModel)(user_schema_1.User.name)),
+    __metadata("design:paramtypes", [mongoose_2.Model])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

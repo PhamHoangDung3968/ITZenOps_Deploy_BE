@@ -5,14 +5,16 @@ import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { User, UserDocument } from '../users/user.schema';
-import { Role, RoleDocument } from '../roles/roles.schema';
+import * as argon2 from 'argon2';
+import { randomBytes } from 'crypto';
+import { MailerService } from '@nestjs-modules/mailer';
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
   constructor(
     private configService: ConfigService,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
-    @InjectModel('Role') private roleModel: Model<RoleDocument>,
+    private mailerService: MailerService,
   ) {
     super({
       clientID: configService.get<string>('GOOGLE_CLIENT_ID')!,
@@ -33,37 +35,61 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
     let user = await this.userModel.findOne({ email });
 
+    const generatedUsername = email.split('@')[0];
+    const rawPassword = randomBytes(8).toString('hex');
+    const hashedPassword = await argon2.hash(rawPassword);
+
+    const defaultRoleId = new Types.ObjectId('690ac8129504cedae7597362');
+    const specialRoleId = '690ac7fd9504cedae759735e';
+
     if (!user) {
       user = new this.userModel({
         name: name.givenName,
         email,
-        dayOfBirth: null,
+        username: generatedUsername,
+        password: hashedPassword,
         provider: 'google',
         googleId: id,
         status: 1,
         lastLogin: new Date(),
         sex: null,
-        roleId: '690ac8129504cedae7597362',
+        dayOfBirth: null,
+        roleId: defaultRoleId,
+        emailSent: false,
       });
 
       await user.save();
-    } else {
-      // Kiểm tra nếu thiếu bất kỳ trường nào thì không cập nhật
-      const hasAllFields =
-        user.status !== undefined &&
-        user.lastLogin !== undefined &&
-        user.sex !== undefined &&
-        user.roleId !== undefined &&
-        user.dayOfBirth !== undefined;
 
-      if (!hasAllFields) {
-        user.status ??= 1;
-        user.lastLogin ??= new Date();
-        user.sex ??= null;
-        user.roleId ??= new Types.ObjectId('690ac8129504cedae7597362');
-        user.dayOfBirth ??= null;
+      // Nếu role mặc định trùng với role đặc biệt thì gửi email ngay
+      if (String(defaultRoleId) === specialRoleId) {
+        await this.mailerService.sendMail({
+          to: email,
+          subject: 'Thông tin đăng nhập ITZenOps',
+          text: `Xin chào ${name.givenName},\n\nTài khoản của bạn đã được tạo:\n\nUsername: ${generatedUsername}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
+        });
+
+        user.emailSent = true;
         await user.save();
       }
+    } else {
+      user.lastLogin = new Date();
+
+      // Nếu role đã bị đổi sang role đặc biệt và chưa gửi email
+      if (
+        String(user.roleId) === specialRoleId &&
+        user.emailSent !== true
+      ) {
+        await this.mailerService.sendMail({
+          to: email,
+          subject: 'Thông tin đăng nhập ITZenOps',
+          text: `Xin chào ${user.name},\n\nTài khoản của bạn đã được cập nhật:\n\nUsername: ${user.username}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
+        });
+
+        user.password = hashedPassword;
+        user.emailSent = true;
+      }
+
+      await user.save();
     }
 
     done(null, user);

@@ -29,25 +29,6 @@ let UsersService = class UsersService {
     async getAllUsers() {
         return this.userModel.find().exec();
     }
-    async findUserById(id) {
-        const user = await this.userModel.findById(id).exec();
-        if (!user)
-            throw new common_1.NotFoundException('User không tồn tại');
-        return user;
-    }
-    async update(id, data) {
-        if (!(0, mongoose_2.isValidObjectId)(id)) {
-            throw new common_1.BadRequestException('ID không hợp lệ');
-        }
-        const updatedUser = await this.userModel.findByIdAndUpdate(id, data, {
-            new: true,
-            runValidators: true,
-        });
-        if (!updatedUser) {
-            throw new common_1.NotFoundException('Không tìm thấy người dùng để cập nhật');
-        }
-        return updatedUser;
-    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([

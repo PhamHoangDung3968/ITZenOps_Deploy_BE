@@ -1,30 +1,32 @@
-import { AuthService } from './auth.service';
-import { CreateAdminDto } from '../admins/dto/create-admin.dto';
 import type { Request, Response } from 'express';
+import { AuthService } from './auth.service';
 export declare class AuthController {
-    private authService;
+    private readonly authService;
     constructor(authService: AuthService);
-    login(dto: CreateAdminDto, req: Request, res: Response): Promise<Response<any, Record<string, any>>>;
-    verify(req: Request): Promise<{
-        type: string;
+    googleAuth(): Promise<void>;
+    googleAuthRedirect(req: Request, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    login(body: {
+        username: string;
+        password: string;
+    }): Promise<{
+        message: string;
+        sessionId: string;
         user: {
-            id: string;
-            username: string;
-            role: string;
-        };
-    } | {
-        type: string;
-        user: {
-            id: string;
+            _id: unknown;
+            username: string | undefined;
             email: string;
-            username: string;
-            roleId?: string;
-            sex?: string;
-            dayOfBirth?: string;
-            lastLogin?: string;
+            name: string;
+            roleId: import("mongoose").Types.ObjectId | import("../roles/roles.schema").Role;
+            sex: string | null;
+            dayOfBirth: Date | null;
+            lastLogin: Date;
         };
     }>;
-    logout(req: Request, res: Response): Response<any, Record<string, any>>;
-    googleAuth(): Promise<void>;
-    googleAuthRedirect(req: Request, res: Response): Promise<void>;
+    verify(req: Request): {
+        authenticated: boolean;
+        user: Express.User | undefined;
+    };
+    logout(sessionId: string): {
+        success: boolean;
+    };
 }

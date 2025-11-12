@@ -94,110 +94,111 @@
 
 
 
+
+
+
+
+
+
+
+
+
 import {
   Controller,
-  Post,
-  Body,
   Get,
-  UnauthorizedException,
   Req,
   Res,
   UseGuards,
+  Headers,
+  Post,
+  Body,
+  UnauthorizedException,
 } from '@nestjs/common';
-import { AuthService } from './auth.service';
-import { CreateAdminDto } from '../admins/dto/create-admin.dto';
 import { AuthGuard } from '@nestjs/passport';
 import type { Request, Response } from 'express';
-import { AdminDocument } from '../admins/admins.schema';
-import { UserDocument } from '../users/user.schema';
-import { Types } from 'mongoose';
+import { createSession, deleteSession } from './session.store';
+import { SessionGuard } from './session.guard';
+import { AuthService } from './auth.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
-  // ✅ Đăng nhập bằng username/password cho admin
-  @Post('login')
-  async login(
-    @Body() dto: CreateAdminDto,
-    @Req() req: Request,
-    @Res() res: Response,
-  ) {
-    const admin = await this.authService.validateAdmin(dto.username, dto.password) as AdminDocument;
-
-    req.session.admin = {
-      id: (admin._id as Types.ObjectId).toString(),
-      username: admin.username,
-      role: 'admin',
-    };
-
-    return res.json({ message: 'Đăng nhập admin thành công' });
-  }
-
-  // ✅ Kiểm tra đăng nhập (admin hoặc user)
-  @Get('verify')
-  async verify(@Req() req: Request) {
-    if (req.session.admin) {
-      return { type: 'admin', user: req.session.admin };
-    }
-    if (req.session.user) {
-      return { type: 'user', user: req.session.user };
-    }
-    throw new UnauthorizedException('Chưa đăng nhập');
-  }
-
-  // ✅ Đăng xuất
-  @Post('logout')
-  logout(@Req() req: Request, @Res() res: Response) {
-    req.session.destroy(() => { });
-    res.clearCookie('connect.sid');
-    return res.json({ message: 'Đã đăng xuất' });
-  }
-
-  // ✅ Bắt đầu đăng nhập bằng Google (cho user)
+  // ✅ Đăng nhập bằng Google
   @Get('google')
   @UseGuards(AuthGuard('google'))
-  async googleAuth() {
-    // Passport sẽ tự redirect đến Google
-  }
+  async googleAuth() {}
 
   // ✅ Callback sau khi Google xác thực
   @Get('google/callback')
   @UseGuards(AuthGuard('google'))
   async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
-    const user = req.user as UserDocument;
+    const user = req.user;
+    if (!user) return res.status(400).send('User not found');
 
-    req.session.user = {
-      id: (user._id as Types.ObjectId).toString(),
-      email: user.email,
-      username: user.name,
-      roleId: user.roleId?.toString() ?? '',
-      sex: user.sex ?? '',
-      dayOfBirth: user.dayOfBirth?.toString() ?? '',
-      lastLogin: user.lastLogin?.toString() ?? '',
-    };
+    const sessionId = createSession({
+      _id: user['_id'],
+      email: user['email'],
+      name: user['name'],
+      roleId: user['roleId'],
+      sex: user['sex'],
+      dayOfBirth: user['dayOfBirth'],
+      lastLogin: user['lastLogin'],
+    });
 
     const html = `
       <script>
         window.opener.postMessage({
-          message: 'Đăng nhập Google thành công!',
-          username: '${user.name}',
-          email: '${user.email}',
-          roleId: '${user.roleId ?? ''}'
-        }, 'https://itzenops.vercel.app/');
+          sessionId: '${sessionId}',
+          username: '${user['name']}',
+          email: '${user['email']}',
+          sex: '${user['sex'] ?? ''}',
+          roleId: '${user['roleId'] ?? ''}',
+          dayOfBirth: '${user['dayOfBirth'] ?? ''}',
+          lastLogin: '${user['lastLogin'] ?? ''}'
+        }, 'https://itzenops.vercel.app');
         window.close();
       </script>
     `;
     res.send(html);
   }
-  @Get('verify-google')
-  async verifyGoogle(@Req() req: Request) {
-    if (req.session.user) {
-      return {
-        message: 'Đã đăng nhập bằng Google',
-        user: req.session.user,
-      };
-    }
-    throw new UnauthorizedException('Chưa đăng nhập bằng Google');
+
+  // ✅ Đăng nhập bằng tài khoản thường
+  @Post('login')
+  async login(@Body() body: { username: string; password: string }) {
+    const user = await this.authService.validateUser(body.username, body.password);
+
+    const sessionId = createSession({
+      _id: user._id,
+      email: user.email,
+      name: user.name,
+      roleId: user.roleId,
+      sex: user.sex,
+      dayOfBirth: user.dayOfBirth,
+      lastLogin: user.lastLogin,
+    });
+
+    return {
+      message: 'Đăng nhập thành công',
+      sessionId,
+      user,
+    };
+  }
+
+  // ✅ Kiểm tra session
+  @Get('verify')
+  @UseGuards(SessionGuard)
+  verify(@Req() req: Request) {
+    return {
+      authenticated: true,
+      user: req.user,
+    };
+  }
+
+  // ✅ Đăng xuất
+  @Post('logout')
+  logout(@Headers('x-session-id') sessionId: string) {
+    deleteSession(sessionId);
+    return { success: true };
   }
 }

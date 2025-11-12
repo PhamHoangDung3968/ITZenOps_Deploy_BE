@@ -14,89 +14,74 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
-const auth_service_1 = require("./auth.service");
-const create_admin_dto_1 = require("../admins/dto/create-admin.dto");
 const passport_1 = require("@nestjs/passport");
+const session_store_1 = require("./session.store");
+const session_guard_1 = require("./session.guard");
+const auth_service_1 = require("./auth.service");
 let AuthController = class AuthController {
     authService;
     constructor(authService) {
         this.authService = authService;
     }
-    async login(dto, req, res) {
-        const admin = await this.authService.validateAdmin(dto.username, dto.password);
-        req.session.admin = {
-            id: admin._id.toString(),
-            username: admin.username,
-            role: 'admin',
-        };
-        return res.json({ message: 'Đăng nhập admin thành công' });
-    }
-    async verify(req) {
-        if (req.session.admin) {
-            return { type: 'admin', user: req.session.admin };
-        }
-        if (req.session.user) {
-            return { type: 'user', user: req.session.user };
-        }
-        throw new common_1.UnauthorizedException('Chưa đăng nhập');
-    }
-    logout(req, res) {
-        req.session.destroy(() => { });
-        res.clearCookie('connect.sid');
-        return res.json({ message: 'Đã đăng xuất' });
-    }
-    async googleAuth() {
-    }
+    async googleAuth() { }
     async googleAuthRedirect(req, res) {
         const user = req.user;
-        req.session.user = {
-            id: user._id.toString(),
-            email: user.email,
-            username: user.name,
-            roleId: user.roleId?.toString() ?? '',
-            sex: user.sex ?? '',
-            dayOfBirth: user.dayOfBirth?.toString() ?? '',
-            lastLogin: user.lastLogin?.toString() ?? '',
-        };
+        if (!user)
+            return res.status(400).send('User not found');
+        const sessionId = (0, session_store_1.createSession)({
+            _id: user['_id'],
+            email: user['email'],
+            name: user['name'],
+            roleId: user['roleId'],
+            sex: user['sex'],
+            dayOfBirth: user['dayOfBirth'],
+            lastLogin: user['lastLogin'],
+        });
         const html = `
       <script>
         window.opener.postMessage({
-          message: 'Đăng nhập Google thành công!',
-          username: '${user.name}',
-          email: '${user.email}',
-          roleId: '${user.roleId ?? ''}'
+          sessionId: '${sessionId}',
+          username: '${user['name']}',
+          email: '${user['email']}',
+          sex: '${user['sex'] ?? ''}',
+          roleId: '${user['roleId'] ?? ''}',
+          dayOfBirth: '${user['dayOfBirth'] ?? ''}',
+          lastLogin: '${user['lastLogin'] ?? ''}'
         }, 'http://localhost:3001');
         window.close();
       </script>
     `;
         res.send(html);
     }
+    async login(body) {
+        const user = await this.authService.validateUser(body.username, body.password);
+        const sessionId = (0, session_store_1.createSession)({
+            _id: user._id,
+            email: user.email,
+            name: user.name,
+            roleId: user.roleId,
+            sex: user.sex,
+            dayOfBirth: user.dayOfBirth,
+            lastLogin: user.lastLogin,
+        });
+        return {
+            message: 'Đăng nhập thành công',
+            sessionId,
+            user,
+        };
+    }
+    verify(req) {
+        return {
+            authenticated: true,
+            user: req.user,
+        };
+    }
+    logout(sessionId) {
+        (0, session_store_1.deleteSession)(sessionId);
+        return { success: true };
+    }
 };
 exports.AuthController = AuthController;
-__decorate([
-    (0, common_1.Post)('login'),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Req)()),
-    __param(2, (0, common_1.Res)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [create_admin_dto_1.CreateAdminDto, Object, Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "login", null);
-__decorate([
-    (0, common_1.Get)('verify'),
-    __param(0, (0, common_1.Req)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "verify", null);
-__decorate([
-    (0, common_1.Post)('logout'),
-    __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Res)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
-    __metadata("design:returntype", void 0)
-], AuthController.prototype, "logout", null);
 __decorate([
     (0, common_1.Get)('google'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google')),
@@ -113,6 +98,28 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "googleAuthRedirect", null);
+__decorate([
+    (0, common_1.Post)('login'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "login", null);
+__decorate([
+    (0, common_1.Get)('verify'),
+    (0, common_1.UseGuards)(session_guard_1.SessionGuard),
+    __param(0, (0, common_1.Req)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "verify", null);
+__decorate([
+    (0, common_1.Post)('logout'),
+    __param(0, (0, common_1.Headers)('x-session-id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", void 0)
+], AuthController.prototype, "logout", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService])

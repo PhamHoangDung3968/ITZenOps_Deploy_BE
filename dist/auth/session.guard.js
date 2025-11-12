@@ -8,13 +8,19 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SessionGuard = void 0;
 const common_1 = require("@nestjs/common");
+const session_store_1 = require("./session.store");
 let SessionGuard = class SessionGuard {
     canActivate(context) {
-        const req = context.switchToHttp().getRequest();
-        const isLoggedIn = req.session?.user || req.session?.admin;
-        if (!isLoggedIn) {
-            throw new common_1.UnauthorizedException('Bạn chưa đăng nhập');
+        const request = context.switchToHttp().getRequest();
+        const sessionId = request.headers['x-session-id'];
+        if (!sessionId) {
+            throw new common_1.UnauthorizedException('Missing session ID');
         }
+        const session = (0, session_store_1.getSession)(sessionId);
+        if (!session) {
+            throw new common_1.UnauthorizedException('Invalid session');
+        }
+        request.user = session.user;
         return true;
     }
 };

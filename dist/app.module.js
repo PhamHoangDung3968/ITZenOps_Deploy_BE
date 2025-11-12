@@ -10,11 +10,11 @@ exports.AppModule = void 0;
 const common_1 = require("@nestjs/common");
 const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
+const mailer_1 = require("@nestjs-modules/mailer");
 const app_controller_1 = require("./app.controller");
 const app_service_1 = require("./app.service");
 const users_module_1 = require("./users/users.module");
 const roles_module_1 = require("./roles/roles.module");
-const admins_module_1 = require("./admins/admins.module");
 const auth_module_1 = require("./auth/auth.module");
 let AppModule = class AppModule {
 };
@@ -28,9 +28,22 @@ exports.AppModule = AppModule = __decorate([
             mongoose_1.MongooseModule.forRoot(process.env.MONGO_URI, {
                 dbName: process.env.MONGO_DB,
             }),
+            mailer_1.MailerModule.forRoot({
+                transport: {
+                    host: 'smtp.gmail.com',
+                    port: 587,
+                    secure: false,
+                    auth: {
+                        user: process.env.MAIL_USER,
+                        pass: process.env.MAIL_PASS,
+                    },
+                },
+                defaults: {
+                    from: '"ITZenOps" <no-reply@itzenops.com>',
+                },
+            }),
             users_module_1.UsersModule,
             roles_module_1.RolesModule,
-            admins_module_1.AdminsModule,
             auth_module_1.AuthModule,
         ],
         controllers: [app_controller_1.AppController],

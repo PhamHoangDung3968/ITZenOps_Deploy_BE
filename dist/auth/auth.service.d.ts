@@ -1,9 +1,16 @@
-import { AdminsService } from '../admins/admins.service';
-import { AdminDocument } from '../admins/admins.schema';
+import { Model } from 'mongoose';
+import { UserDocument } from '../users/user.schema';
 export declare class AuthService {
-    private adminService;
-    constructor(adminService: AdminsService);
-    private readonly secret;
-    validateAdmin(username: string, password: string): Promise<AdminDocument>;
-    verifyToken(token: string): Promise<boolean>;
+    private readonly userModel;
+    constructor(userModel: Model<UserDocument>);
+    validateUser(username: string, password: string): Promise<{
+        _id: unknown;
+        username: string | undefined;
+        email: string;
+        name: string;
+        roleId: import("mongoose").Types.ObjectId | import("../roles/roles.schema").Role;
+        sex: string | null;
+        dayOfBirth: Date | null;
+        lastLogin: Date;
+    }>;
 }

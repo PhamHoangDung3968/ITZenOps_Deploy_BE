@@ -15,6 +15,9 @@ const mongoose_2 = require("mongoose");
 let User = class User {
     name;
     email;
+    username;
+    password;
+    emailSent;
     dayOfBirth;
     provider;
     googleId;
@@ -33,7 +36,19 @@ __decorate([
     __metadata("design:type", String)
 ], User.prototype, "email", void 0);
 __decorate([
-    (0, mongoose_1.Prop)({ type: Date, required: false }),
+    (0, mongoose_1.Prop)({ type: String, required: false }),
+    __metadata("design:type", String)
+], User.prototype, "username", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, required: false }),
+    __metadata("design:type", String)
+], User.prototype, "password", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ default: false }),
+    __metadata("design:type", Boolean)
+], User.prototype, "emailSent", void 0);
+__decorate([
+    (0, mongoose_1.Prop)({ type: String, required: false }),
     __metadata("design:type", Object)
 ], User.prototype, "dayOfBirth", void 0);
 __decorate([
@@ -58,7 +73,7 @@ __decorate([
 ], User.prototype, "sex", void 0);
 __decorate([
     (0, mongoose_1.Prop)({ type: mongoose_2.Types.ObjectId, ref: 'Role', required: false }),
-    __metadata("design:type", mongoose_2.Types.ObjectId)
+    __metadata("design:type", Object)
 ], User.prototype, "roleId", void 0);
 exports.User = User = __decorate([
     (0, mongoose_1.Schema)()

@@ -1,5 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document, Types } from 'mongoose';
+import { Role } from '../roles/roles.schema'; // đường dẫn đúng tới Role
 
 export type UserDocument = User & Document;
 
@@ -11,7 +12,16 @@ export class User {
   @Prop({ required: true, unique: true })
   email: string;
 
-  @Prop({ type: Date, required: false })
+  @Prop({ type: String, required: false })
+  username?: string; // ✅ Thêm username
+
+  @Prop({ type: String, required: false })
+  password?: string; // ✅ Thêm password (đã hash)
+  
+  @Prop({ default: false })
+  emailSent: boolean;
+
+  @Prop({ type: String, required: false })
   dayOfBirth: Date | null;
 
   @Prop()
@@ -29,9 +39,8 @@ export class User {
   @Prop({ type: String, required: false })
   sex: string | null;
 
-  // ✅ Giữ kiểu ObjectId, không cần Role nếu không populate
   @Prop({ type: Types.ObjectId, ref: 'Role', required: false })
-  roleId: Types.ObjectId;
+  roleId: Role | Types.ObjectId;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
