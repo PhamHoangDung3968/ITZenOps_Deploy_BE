@@ -51,10 +51,16 @@ const mongoose_1 = require("@nestjs/mongoose");
 const mongoose_2 = require("mongoose");
 const user_schema_1 = require("../users/user.schema");
 const argon2 = __importStar(require("argon2"));
+const jwt_1 = require("@nestjs/jwt");
+const redis_service_1 = require("../redis/redis.service");
 let AuthService = class AuthService {
     userModel;
-    constructor(userModel) {
+    jwtService;
+    redisService;
+    constructor(userModel, jwtService, redisService) {
         this.userModel = userModel;
+        this.jwtService = jwtService;
+        this.redisService = redisService;
     }
     async validateUser(username, password) {
         const user = await this.userModel.findOne({ username });
@@ -75,21 +81,72 @@ let AuthService = class AuthService {
         user.lastLogin = new Date();
         await user.save();
         return {
-            _id: user._id,
+            _id: String(user._id),
             username: user.username,
             email: user.email,
             name: user.name,
-            roleId: user.roleId,
-            sex: user.sex,
-            dayOfBirth: user.dayOfBirth,
+            roleId: String(user.roleId),
+            sex: user.sex ?? null,
+            dayOfBirth: user.dayOfBirth ?? null,
             lastLogin: user.lastLogin,
         };
+    }
+    async validateUserById(userId) {
+        const user = await this.userModel.findById(userId);
+        if (!user)
+            throw new common_1.UnauthorizedException('User không tồn tại');
+        return {
+            _id: String(user._id),
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            roleId: String(user.roleId),
+            sex: user.sex ?? null,
+            dayOfBirth: user.dayOfBirth ?? null,
+            lastLogin: user.lastLogin,
+        };
+    }
+    async getTokens(payload) {
+        const accessToken = this.jwtService.sign({
+            _id: payload._id,
+            username: payload.username,
+            email: payload.email,
+            name: payload.name,
+            roleId: payload.roleId,
+            sex: payload.sex,
+            dayOfBirth: payload.dayOfBirth,
+            lastLogin: payload.lastLogin,
+        }, { expiresIn: '1d' });
+        const refreshToken = this.jwtService.sign({ userId: payload._id }, { expiresIn: '7d' });
+        return { accessToken, refreshToken };
+    }
+    async updateRefreshToken(userId, refreshToken) {
+        const redis = this.redisService.getClient();
+        await redis.set(`refresh:${userId}`, refreshToken, 'EX', 7 * 24 * 60 * 60);
+    }
+    async getStoredRefreshToken(userId) {
+        const redis = this.redisService.getClient();
+        return redis.get(`refresh:${userId}`);
+    }
+    async removeRefreshToken(userId) {
+        const redis = this.redisService.getClient();
+        await redis.del(`refresh:${userId}`);
+    }
+    async verifyRefreshToken(refreshToken) {
+        try {
+            return this.jwtService.verify(refreshToken);
+        }
+        catch (e) {
+            throw new common_1.UnauthorizedException('Refresh Token không hợp lệ hoặc đã hết hạn');
+        }
     }
 };
 exports.AuthService = AuthService;
 exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __param(0, (0, mongoose_1.InjectModel)(user_schema_1.User.name)),
-    __metadata("design:paramtypes", [mongoose_2.Model])
+    __metadata("design:paramtypes", [mongoose_2.Model,
+        jwt_1.JwtService,
+        redis_service_1.RedisService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

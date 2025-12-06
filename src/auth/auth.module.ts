@@ -1,65 +1,38 @@
-// import { Module } from '@nestjs/common';
-// import { JwtModule } from '@nestjs/jwt';
-// import { PassportModule } from '@nestjs/passport';
-// import { AuthService } from './auth.service';
-// import { AuthController } from './auth.controller';
-// import { JwtStrategy } from './jwt.strategy';
-// import { GoogleStrategy } from './google.strategy';
-// import { AdminsModule } from '../admins/admins.module';
-// import { ConfigModule, ConfigService } from '@nestjs/config';
-// import { MongooseModule } from '@nestjs/mongoose';
-// import { User, UserSchema } from '../users/user.schema';
-// import { RolesModule } from 'src/roles/roles.module';
-
-// @Module({
-//   imports: [
-//     ConfigModule, // ✅ Đảm bảo biến môi trường được inject
-//     PassportModule,
-//     JwtModule.registerAsync({
-//       imports: [ConfigModule],
-//       inject: [ConfigService],
-//       useFactory: async (configService: ConfigService) => ({
-//         secret: configService.get<string>('JWT_SECRET'),
-//         signOptions: { expiresIn: '12h' },
-//       }),
-//     }),
-//     AdminsModule,
-//     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]), // ✅ Cho phép GoogleStrategy truy cập UserModel
-//     RolesModule,
-//   ],
-//   providers: [AuthService, JwtStrategy, GoogleStrategy],
-//   controllers: [AuthController],
-// })
-// export class AuthModule {}
-
-
-
-
-
 import { Module } from '@nestjs/common';
 import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
+
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { GoogleStrategy } from './google.strategy';
-import { ConfigModule } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { JwtAuthGuard } from './jwt-auth.guard';
+
 import { User, UserSchema } from '../users/user.schema';
-import { RolesModule } from 'src/roles/roles.module';
-import { SessionGuard } from './session.guard';
+import { RolesModule } from '../roles/roles.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
-    ConfigModule, // ✅ Inject biến môi trường
+    ConfigModule.forRoot({ isGlobal: true }),
     PassportModule,
-    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]), // ✅ Cho phép GoogleStrategy truy cập UserModel
+    JwtModule.register({
+      secret: process.env.JWT_SECRET,
+      signOptions: { expiresIn: '15m' },
+    }),
+    MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     RolesModule,
+    RedisModule,
   ],
   providers: [
     AuthService,
     GoogleStrategy,
-    SessionGuard, // ✅ Thêm SessionGuard để bảo vệ route
+    JwtStrategy,
+    JwtAuthGuard,
   ],
   controllers: [AuthController],
-  exports: [SessionGuard], // ✅ Cho phép module khác dùng guard
+  exports: [JwtAuthGuard],
 })
 export class AuthModule {}

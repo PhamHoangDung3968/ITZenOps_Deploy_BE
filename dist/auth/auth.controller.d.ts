@@ -1,32 +1,30 @@
 import type { Request, Response } from 'express';
-import { AuthService } from './auth.service';
+import { AuthService, TokenPayload } from './auth.service';
+import { ConfigService } from '@nestjs/config';
 export declare class AuthController {
     private readonly authService;
-    constructor(authService: AuthService);
+    private readonly configService;
+    constructor(authService: AuthService, configService: ConfigService);
+    private setRefreshTokenCookie;
     googleAuth(): Promise<void>;
     googleAuthRedirect(req: Request, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
     login(body: {
         username: string;
         password: string;
-    }): Promise<{
+    }, res: Response): Promise<{
         message: string;
-        sessionId: string;
-        user: {
-            _id: unknown;
-            username: string | undefined;
-            email: string;
-            name: string;
-            roleId: import("mongoose").Types.ObjectId | import("../roles/roles.schema").Role;
-            sex: string | null;
-            dayOfBirth: Date | null;
-            lastLogin: Date;
-        };
+        accessToken: string;
+        user: TokenPayload;
+    }>;
+    refreshTokens(req: Request, res: Response): Promise<{
+        accessToken: string;
     }>;
     verify(req: Request): {
         authenticated: boolean;
-        user: Express.User | undefined;
+        user: Express.User;
     };
-    logout(sessionId: string): {
+    logout(req: Request, res: Response): Promise<{
         success: boolean;
-    };
+        message: string;
+    }>;
 }

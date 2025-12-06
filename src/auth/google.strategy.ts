@@ -1,5 +1,5 @@
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, StrategyOptions, VerifyCallback } from 'passport-google-oauth20';
+import { Strategy } from 'passport-google-oauth20';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
@@ -21,16 +21,15 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET')!,
       callbackURL: configService.get<string>('GOOGLE_REDIRECT_URI')!,
       scope: ['email', 'profile'],
-    } as StrategyOptions);
+    });
   }
 
   async validate(
     accessToken: string,
     refreshToken: string,
     profile: any,
-    done: VerifyCallback,
   ): Promise<any> {
-    const { name, emails, id } = profile;
+    const { name, emails, id, displayName } = profile;
     const email = emails[0].value;
 
     let user = await this.userModel.findOne({ email });
@@ -44,7 +43,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
     if (!user) {
       user = new this.userModel({
-        name: name.givenName,
+        name: name?.givenName || displayName,
         email,
         username: generatedUsername,
         password: hashedPassword,
@@ -52,7 +51,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
         googleId: id,
         status: 1,
         lastLogin: new Date(),
-        sex: null,
+        sex: 'Khác',
         dayOfBirth: null,
         roleId: defaultRoleId,
         emailSent: false,
@@ -60,12 +59,11 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
       await user.save();
 
-      // Nếu role mặc định trùng với role đặc biệt thì gửi email ngay
       if (String(defaultRoleId) === specialRoleId) {
         await this.mailerService.sendMail({
           to: email,
           subject: 'Thông tin đăng nhập ITZenOps',
-          text: `Xin chào ${name.givenName},\n\nTài khoản của bạn đã được tạo:\n\nUsername: ${generatedUsername}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
+          text: `Xin chào ${user.name},\n\nTài khoản của bạn đã được tạo:\n\nUsername: ${generatedUsername}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
         });
 
         user.emailSent = true;
@@ -74,11 +72,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     } else {
       user.lastLogin = new Date();
 
-      // Nếu role đã bị đổi sang role đặc biệt và chưa gửi email
-      if (
-        String(user.roleId) === specialRoleId &&
-        user.emailSent !== true
-      ) {
+      if (String(user.roleId) === specialRoleId && user.emailSent !== true) {
         await this.mailerService.sendMail({
           to: email,
           subject: 'Thông tin đăng nhập ITZenOps',
@@ -92,6 +86,6 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
       await user.save();
     }
 
-    done(null, user);
+    return user;
   }
 }

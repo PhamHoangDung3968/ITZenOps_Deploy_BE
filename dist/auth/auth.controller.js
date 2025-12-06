@@ -15,74 +15,118 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
-const session_store_1 = require("./session.store");
-const session_guard_1 = require("./session.guard");
 const auth_service_1 = require("./auth.service");
+const jwt_auth_guard_1 = require("./jwt-auth.guard");
+const public_decorator_1 = require("./decorators/public.decorator");
+const config_1 = require("@nestjs/config");
 let AuthController = class AuthController {
     authService;
-    constructor(authService) {
+    configService;
+    constructor(authService, configService) {
         this.authService = authService;
+        this.configService = configService;
+    }
+    setRefreshTokenCookie(res, refreshToken) {
+        const secure = this.configService.get('NODE_ENV') === 'production';
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            secure,
+            sameSite: 'strict',
+            path: '/',
+            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        });
     }
     async googleAuth() { }
     async googleAuthRedirect(req, res) {
         const user = req.user;
         if (!user)
             return res.status(400).send('User not found');
-        const sessionId = (0, session_store_1.createSession)({
-            _id: user['_id'],
-            email: user['email'],
-            name: user['name'],
-            roleId: user['roleId'],
-            sex: user['sex'],
-            dayOfBirth: user['dayOfBirth'],
-            lastLogin: user['lastLogin'],
-        });
+        const tokenUser = {
+            _id: String(user._id),
+            email: user.email,
+            name: user.name,
+            roleId: String(user.roleId),
+            sex: user.sex,
+            dayOfBirth: user.dayOfBirth,
+        };
+        const { accessToken, refreshToken } = await this.authService.getTokens(tokenUser);
+        await this.authService.updateRefreshToken(String(user._id), refreshToken);
         const html = `
       <script>
         window.opener.postMessage({
-          sessionId: '${sessionId}',
-          username: '${user['name']}',
-          email: '${user['email']}',
-          sex: '${user['sex'] ?? ''}',
-          roleId: '${user['roleId'] ?? ''}',
-          dayOfBirth: '${user['dayOfBirth'] ?? ''}',
-          lastLogin: '${user['lastLogin'] ?? ''}'
+          accessToken: '${accessToken}',
+          refreshToken: '${refreshToken}',
+          username: '${user.name}',
+          email: '${user.email}',
+          roleId: '${user.roleId ?? ''}'
         }, 'http://localhost:3001');
         window.close();
       </script>
     `;
         res.send(html);
     }
-    async login(body) {
+    async login(body, res) {
         const user = await this.authService.validateUser(body.username, body.password);
-        const sessionId = (0, session_store_1.createSession)({
-            _id: user._id,
+        const tokenUser = {
+            _id: String(user._id),
             email: user.email,
             name: user.name,
-            roleId: user.roleId,
+            roleId: String(user.roleId),
             sex: user.sex,
             dayOfBirth: user.dayOfBirth,
-            lastLogin: user.lastLogin,
-        });
+        };
+        const { accessToken, refreshToken } = await this.authService.getTokens(tokenUser);
+        await this.authService.updateRefreshToken(String(user._id), refreshToken);
+        this.setRefreshTokenCookie(res, refreshToken);
         return {
             message: 'Đăng nhập thành công',
-            sessionId,
+            accessToken,
             user,
         };
     }
+    async refreshTokens(req, res) {
+        const refreshToken = req.cookies['refreshToken'];
+        if (!refreshToken)
+            throw new common_1.UnauthorizedException('Missing Refresh Token');
+        try {
+            const payload = await this.authService.verifyRefreshToken(refreshToken);
+            const userId = payload.userId;
+            const storedToken = await this.authService.getStoredRefreshToken(userId);
+            if (!storedToken || storedToken !== refreshToken) {
+                res.clearCookie('refreshToken');
+                throw new common_1.UnauthorizedException('Refresh Token không hợp lệ hoặc đã bị thu hồi');
+            }
+            const user = await this.authService.validateUserById(userId);
+            const { accessToken, refreshToken: newRefreshToken } = await this.authService.getTokens(user);
+            await this.authService.updateRefreshToken(userId, newRefreshToken);
+            this.setRefreshTokenCookie(res, newRefreshToken);
+            return { accessToken };
+        }
+        catch (e) {
+            res.clearCookie('refreshToken');
+            throw new common_1.UnauthorizedException('Refresh Token không hợp lệ');
+        }
+    }
     verify(req) {
+        if (!req.user)
+            throw new common_1.UnauthorizedException('User not authenticated');
         return {
             authenticated: true,
             user: req.user,
         };
     }
-    logout(sessionId) {
-        (0, session_store_1.deleteSession)(sessionId);
-        return { success: true };
+    async logout(req, res) {
+        if (!req.user)
+            throw new common_1.UnauthorizedException('User not authenticated');
+        const userId = req.user.userId;
+        await this.authService.removeRefreshToken(userId);
+        res.clearCookie('refreshToken');
+        return { success: true, message: 'Đăng xuất thành công' };
     }
 };
 exports.AuthController = AuthController;
 __decorate([
+    (0, public_decorator_1.Public)(),
     (0, common_1.Get)('google'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google')),
     __metadata("design:type", Function),
@@ -99,29 +143,43 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "googleAuthRedirect", null);
 __decorate([
+    (0, public_decorator_1.Public)(),
     (0, common_1.Post)('login'),
     __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
+    __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "login", null);
 __decorate([
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Post)('refresh'),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "refreshTokens", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)('verify'),
-    (0, common_1.UseGuards)(session_guard_1.SessionGuard),
     __param(0, (0, common_1.Req)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", void 0)
 ], AuthController.prototype, "verify", null);
 __decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Post)('logout'),
-    __param(0, (0, common_1.Headers)('x-session-id')),
+    __param(0, (0, common_1.Req)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [String]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logout", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService])
+    __metadata("design:paramtypes", [auth_service_1.AuthService,
+        config_1.ConfigService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

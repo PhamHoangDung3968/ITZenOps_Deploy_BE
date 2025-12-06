@@ -3,51 +3,137 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../users/user.schema';
 import * as argon2 from 'argon2';
+import { JwtService } from '@nestjs/jwt';
+import { RedisService } from '../redis/redis.service';
+
+export interface TokenPayload {
+  _id: string;
+  username?: string;
+  email: string;
+  name: string;
+  roleId: string;
+  sex: string | null;
+  dayOfBirth: Date | null;
+  lastLogin?: Date;
+}
 
 @Injectable()
 export class AuthService {
   constructor(
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    private readonly jwtService: JwtService,
+    private readonly redisService: RedisService,
   ) {}
 
-  async validateUser(username: string, password: string) {
-    // 🔍 Tìm người dùng theo username
+  async validateUser(username: string, password: string): Promise<TokenPayload> {
     const user = await this.userModel.findOne({ username });
     if (!user) {
       throw new UnauthorizedException('Tài khoản không tồn tại');
     }
 
-    // 🔒 Kiểm tra mật khẩu có tồn tại không (tránh tài khoản Google)
     if (!user.password) {
       throw new UnauthorizedException('Tài khoản không có mật khẩu');
     }
 
-    // 🔐 So sánh mật khẩu đã hash
     const isValid = await argon2.verify(user.password, password);
     if (!isValid) {
       throw new UnauthorizedException('Sai mật khẩu');
     }
 
-    // ✅ Chỉ cho phép đăng nhập nếu role là đặc biệt
     const allowedRoleId = '690ac7fd9504cedae759735e';
     if (String(user.roleId) !== allowedRoleId) {
       throw new UnauthorizedException('Không có quyền đăng nhập bằng tài khoản thường');
     }
 
-    // 🕒 Cập nhật thời gian đăng nhập
     user.lastLogin = new Date();
     await user.save();
 
-    // ✅ Trả về thông tin người dùng
     return {
-      _id: user._id,
+      _id: String(user._id),
       username: user.username,
       email: user.email,
       name: user.name,
-      roleId: user.roleId,
-      sex: user.sex,
-      dayOfBirth: user.dayOfBirth,
+      roleId: String(user.roleId),
+      sex: user.sex ?? null,
+      dayOfBirth: user.dayOfBirth ?? null,
       lastLogin: user.lastLogin,
     };
+  }
+
+  async validateUserById(userId: string): Promise<TokenPayload> {
+    const user = await this.userModel.findById(userId);
+    if (!user) throw new UnauthorizedException('User không tồn tại');
+
+    return {
+      _id: String(user._id),
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      roleId: String(user.roleId),
+      sex: user.sex ?? null,
+      dayOfBirth: user.dayOfBirth ?? null,
+      lastLogin: user.lastLogin,
+    };
+  }
+
+  /**
+   * Sinh Access Token và Refresh Token
+   */
+  async getTokens(payload: TokenPayload) {
+    const accessToken = this.jwtService.sign(
+      {
+        _id: payload._id,
+        username: payload.username,
+        email: payload.email,
+        name: payload.name,
+        roleId: payload.roleId,
+        sex: payload.sex,
+        dayOfBirth: payload.dayOfBirth,
+        lastLogin: payload.lastLogin,
+      },
+      { expiresIn: '1d' },
+    );
+
+    const refreshToken = this.jwtService.sign(
+      { userId: payload._id },
+      { expiresIn: '7d' },
+    );
+
+    return { accessToken, refreshToken };
+  }
+
+  /**
+   * Lưu Refresh Token vào Redis
+   */
+  async updateRefreshToken(userId: string, refreshToken: string) {
+    const redis = this.redisService.getClient();
+    await redis.set(`refresh:${userId}`, refreshToken, 'EX', 7 * 24 * 60 * 60);
+  }
+
+  /**
+   * Lấy Refresh Token từ Redis
+   */
+  async getStoredRefreshToken(userId: string): Promise<string | null> {
+    const redis = this.redisService.getClient();
+    return redis.get(`refresh:${userId}`);
+  }
+
+  /**
+   * Xóa Refresh Token trong Redis
+   */
+  async removeRefreshToken(userId: string) {
+    const redis = this.redisService.getClient();
+    await redis.del(`refresh:${userId}`);
+  }
+
+  /**
+   * Verify Refresh Token
+   */
+  async verifyRefreshToken(refreshToken: string) {
+    try {
+      return this.jwtService.verify(refreshToken);
+    } catch (e) {
+      throw new UnauthorizedException('Refresh Token không hợp lệ hoặc đã hết hạn');
+    }
   }
 }

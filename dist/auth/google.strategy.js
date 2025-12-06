@@ -71,8 +71,8 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
         this.userModel = userModel;
         this.mailerService = mailerService;
     }
-    async validate(accessToken, refreshToken, profile, done) {
-        const { name, emails, id } = profile;
+    async validate(accessToken, refreshToken, profile) {
+        const { name, emails, id, displayName } = profile;
         const email = emails[0].value;
         let user = await this.userModel.findOne({ email });
         const generatedUsername = email.split('@')[0];
@@ -82,7 +82,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
         const specialRoleId = '690ac7fd9504cedae759735e';
         if (!user) {
             user = new this.userModel({
-                name: name.givenName,
+                name: name?.givenName || displayName,
                 email,
                 username: generatedUsername,
                 password: hashedPassword,
@@ -90,7 +90,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
                 googleId: id,
                 status: 1,
                 lastLogin: new Date(),
-                sex: null,
+                sex: 'Khác',
                 dayOfBirth: null,
                 roleId: defaultRoleId,
                 emailSent: false,
@@ -100,7 +100,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
                 await this.mailerService.sendMail({
                     to: email,
                     subject: 'Thông tin đăng nhập ITZenOps',
-                    text: `Xin chào ${name.givenName},\n\nTài khoản của bạn đã được tạo:\n\nUsername: ${generatedUsername}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
+                    text: `Xin chào ${user.name},\n\nTài khoản của bạn đã được tạo:\n\nUsername: ${generatedUsername}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
                 });
                 user.emailSent = true;
                 await user.save();
@@ -108,8 +108,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
         }
         else {
             user.lastLogin = new Date();
-            if (String(user.roleId) === specialRoleId &&
-                user.emailSent !== true) {
+            if (String(user.roleId) === specialRoleId && user.emailSent !== true) {
                 await this.mailerService.sendMail({
                     to: email,
                     subject: 'Thông tin đăng nhập ITZenOps',
@@ -120,7 +119,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
             }
             await user.save();
         }
-        done(null, user);
+        return user;
     }
 };
 exports.GoogleStrategy = GoogleStrategy;

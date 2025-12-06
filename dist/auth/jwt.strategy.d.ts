@@ -1,12 +1,16 @@
 import { Strategy } from 'passport-jwt';
-declare const JwtStrategy_base: new (...args: [opt: import("passport-jwt").StrategyOptionsWithRequest] | [opt: import("passport-jwt").StrategyOptionsWithoutRequest]) => Strategy & {
+import { ConfigService } from '@nestjs/config';
+import { TokenPayload } from './auth.service';
+declare const JwtStrategy_base: new (...args: [opt: import("passport-jwt").StrategyOptionsWithoutRequest] | [opt: import("passport-jwt").StrategyOptionsWithRequest]) => Strategy & {
     validate(...args: any[]): unknown;
 };
 export declare class JwtStrategy extends JwtStrategy_base {
-    constructor();
-    validate(payload: any): Promise<{
-        userId: any;
-        username: any;
+    constructor(configService: ConfigService);
+    validate(payload: TokenPayload): Promise<{
+        userId: string;
+        email: string;
+        name: string;
+        roleId: string;
     }>;
 }
 export {};
