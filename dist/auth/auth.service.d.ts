@@ -27,4 +27,8 @@ export declare class AuthService {
     getStoredRefreshToken(userId: string): Promise<string | null>;
     removeRefreshToken(userId: string): Promise<void>;
     verifyRefreshToken(refreshToken: string): Promise<any>;
+    blacklistAccessToken(token: string): Promise<void>;
+    whitelistAccessToken(token: string): Promise<void>;
+    isAccessTokenBlacklisted(token: string): Promise<boolean>;
+    isAccessTokenWhitelisted(token: string): Promise<boolean>;
 }

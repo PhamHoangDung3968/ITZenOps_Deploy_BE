@@ -1,138 +1,89 @@
 import {
   Controller,
+  Post,
+  Body,
   Get,
   Req,
   Res,
   UseGuards,
-  Post,
-  Body,
   UnauthorizedException,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
+import type { Request } from 'express';
 import { AuthService, TokenPayload } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { Public } from './decorators/public.decorator';
-import { ConfigService } from '@nestjs/config';
+import { AuthGuard } from '@nestjs/passport';
 
 @Controller('auth')
 export class AuthController {
-  constructor(
-    private readonly authService: AuthService,
-    private readonly configService: ConfigService,
-  ) {}
+  constructor(private readonly authService: AuthService) {}
 
-  private setRefreshTokenCookie(res: Response, refreshToken: string) {
-    const secure = this.configService.get<string>('NODE_ENV') === 'production';
-    res.cookie('refreshToken', refreshToken, {
-      httpOnly: true,
-      secure,
-      sameSite: 'strict',
-      path: '/',
-      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 ngày
-    });
-  }
-
-  // Đăng nhập bằng Google
-  @Public()
-  @Get('google')
-  @UseGuards(AuthGuard('google'))
-  async googleAuth() {}
-
-  //Callback sau khi Google xác thực
-  @Get('google/callback')
-  @UseGuards(AuthGuard('google'))
-  async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
-    const user = req.user as any;
-    if (!user) return res.status(400).send('User not found');
-
-    const tokenUser: Omit<TokenPayload, 'lastLogin'> = {
-      _id: String(user._id),
-      email: user.email,
-      name: user.name,
-      roleId: String(user.roleId),
-      sex: user.sex,
-      dayOfBirth: user.dayOfBirth,
-    };
-
-    const { accessToken, refreshToken } = await this.authService.getTokens(tokenUser);
-    await this.authService.updateRefreshToken(String(user._id), refreshToken);
-
-    const html = `
-      <script>
-        window.opener.postMessage({
-          accessToken: '${accessToken}',
-          refreshToken: '${refreshToken}',
-          username: '${user.name}',
-          email: '${user.email}',
-          roleId: '${user.roleId ?? ''}'
-        }, 'https://itzenops.vercel.app');
-        window.close();
-      </script>
-    `;
-    res.send(html);
-  }
-
-  // Đăng nhập bằng tài khoản thường
+  // Đăng nhập thường
   @Public()
   @Post('login')
-  async login(
-    @Body() body: { username: string; password: string },
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const user = await this.authService.validateUser(body.username, body.password);
+  async login(@Body() body: { username: string; password: string }) {
+    const user: TokenPayload = await this.authService.validateUser(body.username, body.password);
 
-    const tokenUser: Omit<TokenPayload, 'lastLogin'> = {
-      _id: String(user._id),
-      email: user.email,
-      name: user.name,
-      roleId: String(user.roleId),
-      sex: user.sex,
-      dayOfBirth: user.dayOfBirth,
-    };
-
-    const { accessToken, refreshToken } = await this.authService.getTokens(tokenUser);
-    await this.authService.updateRefreshToken(String(user._id), refreshToken);
-
-    this.setRefreshTokenCookie(res, refreshToken);
+    const { accessToken, refreshToken } = await this.authService.getTokens(user);
+    await this.authService.updateRefreshToken(user._id, refreshToken);
+    await this.authService.whitelistAccessToken(accessToken);
 
     return {
       message: 'Đăng nhập thành công',
       accessToken,
-      user,
+      refreshToken,
+      user, // chỉ chứa payload an toàn, không có password
     };
+  }
+
+  // Đăng nhập Google
+  @Public()
+  @Get('google')
+  @UseGuards(AuthGuard('google'))
+  async googleAuth() {
+    // Passport sẽ tự redirect sang Google
+  }
+
+  @Public()
+  @Get('google/callback')
+  @UseGuards(AuthGuard('google'))
+  async googleCallback(@Req() req: Request, @Res() res: Response) {
+    const user = req.user as TokenPayload;
+    const { accessToken, refreshToken } = await this.authService.getTokens(user);
+    await this.authService.updateRefreshToken(user._id, refreshToken);
+    await this.authService.whitelistAccessToken(accessToken);
+
+    // Trả token về cho frontend qua postMessage
+    const payload = { accessToken, refreshToken, username: user.name || user.email };
+    res.send(`
+      <script>
+        window.opener && window.opener.postMessage(${JSON.stringify(payload)}, '*');
+        window.close();
+      </script>
+    `);
   }
 
   // Làm mới Access Token
   @Public()
   @Post('refresh')
-  async refreshTokens(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const refreshToken = req.cookies['refreshToken'];
-    if (!refreshToken) throw new UnauthorizedException('Missing Refresh Token');
+  async refresh(@Body() body: { refreshToken: string }) {
+    if (!body.refreshToken) throw new UnauthorizedException('Missing Refresh Token');
 
-    try {
-      const payload = await this.authService.verifyRefreshToken(refreshToken);
-      const userId = payload.userId;
+    const payload = await this.authService.verifyRefreshToken(body.refreshToken);
+    const userId = payload.userId;
 
-      const storedToken = await this.authService.getStoredRefreshToken(userId);
-      if (!storedToken || storedToken !== refreshToken) {
-        res.clearCookie('refreshToken');
-        throw new UnauthorizedException('Refresh Token không hợp lệ hoặc đã bị thu hồi');
-      }
-
-      // Lấy lại thông tin user từ DB
-      const user = await this.authService.validateUserById(userId);
-
-      const { accessToken, refreshToken: newRefreshToken } = await this.authService.getTokens(user);
-      await this.authService.updateRefreshToken(userId, newRefreshToken);
-
-      this.setRefreshTokenCookie(res, newRefreshToken);
-
-      return { accessToken };
-    } catch (e) {
-      res.clearCookie('refreshToken');
-      throw new UnauthorizedException('Refresh Token không hợp lệ');
+    const storedToken = await this.authService.getStoredRefreshToken(userId);
+    if (!storedToken || storedToken !== body.refreshToken) {
+      throw new UnauthorizedException('Refresh Token không hợp lệ hoặc đã bị thu hồi');
     }
+
+    const user = await this.authService.validateUserById(userId);
+    const { accessToken, refreshToken: newRefreshToken } = await this.authService.getTokens(user);
+    await this.authService.updateRefreshToken(userId, newRefreshToken);
+    await this.authService.whitelistAccessToken(accessToken);
+
+    return { accessToken, refreshToken: newRefreshToken };
   }
 
   // Kiểm tra Access Token
@@ -140,21 +91,20 @@ export class AuthController {
   @Get('verify')
   verify(@Req() req: Request) {
     if (!req.user) throw new UnauthorizedException('User not authenticated');
-    return {
-      authenticated: true,
-      user: req.user,
-    };
+    return { authenticated: true, user: req.user };
   }
 
   // Đăng xuất
   @UseGuards(JwtAuthGuard)
   @Post('logout')
-  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async logout(@Req() req: Request) {
     if (!req.user) throw new UnauthorizedException('User not authenticated');
-    const userId = (req.user as any).userId;
+    const userId = (req.user as TokenPayload)._id;
 
     await this.authService.removeRefreshToken(userId);
-    res.clearCookie('refreshToken');
+
+    const accessToken = req.headers.authorization?.split(' ')[1];
+    if (accessToken) await this.authService.blacklistAccessToken(accessToken);
 
     return { success: true, message: 'Đăng xuất thành công' };
   }

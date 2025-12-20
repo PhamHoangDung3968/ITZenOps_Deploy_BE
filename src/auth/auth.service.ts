@@ -25,20 +25,16 @@ export class AuthService {
     private readonly redisService: RedisService,
   ) {}
 
+  /**
+   * Xác thực user bằng username/password (từ DB)
+   */
   async validateUser(username: string, password: string): Promise<TokenPayload> {
     const user = await this.userModel.findOne({ username });
-    if (!user) {
-      throw new UnauthorizedException('Tài khoản không tồn tại');
-    }
-
-    if (!user.password) {
-      throw new UnauthorizedException('Tài khoản không có mật khẩu');
-    }
+    if (!user) throw new UnauthorizedException('Tài khoản không tồn tại');
+    if (!user.password) throw new UnauthorizedException('Tài khoản không có mật khẩu');
 
     const isValid = await argon2.verify(user.password, password);
-    if (!isValid) {
-      throw new UnauthorizedException('Sai mật khẩu');
-    }
+    if (!isValid) throw new UnauthorizedException('Sai mật khẩu');
 
     const allowedRoleId = '690ac7fd9504cedae759735e';
     if (String(user.roleId) !== allowedRoleId) {
@@ -60,6 +56,9 @@ export class AuthService {
     };
   }
 
+  /**
+   * Lấy user từ DB qua userId
+   */
   async validateUserById(userId: string): Promise<TokenPayload> {
     const user = await this.userModel.findById(userId);
     if (!user) throw new UnauthorizedException('User không tồn tại');
@@ -135,5 +134,49 @@ export class AuthService {
     } catch (e) {
       throw new UnauthorizedException('Refresh Token không hợp lệ hoặc đã hết hạn');
     }
+  }
+
+  // ============================
+  // BLACKLIST / WHITELIST JWT
+  // ============================
+
+  /**
+   * Đưa Access Token vào blacklist
+   */
+  async blacklistAccessToken(token: string) {
+    const decoded: any = this.jwtService.decode(token);
+    if (!decoded?.exp) return;
+    const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+    const redis = this.redisService.getClient();
+    await redis.set(`blacklist:${token}`, 'true', 'EX', ttl);
+  }
+
+  /**
+   * Đưa Access Token vào whitelist
+   */
+  async whitelistAccessToken(token: string) {
+    const decoded: any = this.jwtService.decode(token);
+    if (!decoded?.exp) return;
+    const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+    const redis = this.redisService.getClient();
+    await redis.set(`whitelist:${token}`, 'true', 'EX', ttl);
+  }
+
+  /**
+   * Kiểm tra token có bị blacklist không
+   */
+  async isAccessTokenBlacklisted(token: string): Promise<boolean> {
+    const redis = this.redisService.getClient();
+    const result = await redis.get(`blacklist:${token}`);
+    return result === 'true';
+  }
+
+  /**
+   * Kiểm tra token có nằm trong whitelist không
+   */
+  async isAccessTokenWhitelisted(token: string): Promise<boolean> {
+    const redis = this.redisService.getClient();
+    const result = await redis.get(`whitelist:${token}`);
+    return result === 'true';
   }
 }

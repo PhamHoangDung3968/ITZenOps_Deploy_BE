@@ -1,29 +1,31 @@
-import type { Request, Response } from 'express';
+import type { Response } from 'express';
+import type { Request } from 'express';
 import { AuthService, TokenPayload } from './auth.service';
-import { ConfigService } from '@nestjs/config';
 export declare class AuthController {
     private readonly authService;
-    private readonly configService;
-    constructor(authService: AuthService, configService: ConfigService);
-    private setRefreshTokenCookie;
-    googleAuth(): Promise<void>;
-    googleAuthRedirect(req: Request, res: Response): Promise<Response<any, Record<string, any>> | undefined>;
+    constructor(authService: AuthService);
     login(body: {
         username: string;
         password: string;
-    }, res: Response): Promise<{
+    }): Promise<{
         message: string;
         accessToken: string;
+        refreshToken: string;
         user: TokenPayload;
     }>;
-    refreshTokens(req: Request, res: Response): Promise<{
+    googleAuth(): Promise<void>;
+    googleCallback(req: Request, res: Response): Promise<void>;
+    refresh(body: {
+        refreshToken: string;
+    }): Promise<{
         accessToken: string;
+        refreshToken: string;
     }>;
     verify(req: Request): {
         authenticated: boolean;
         user: Express.User;
     };
-    logout(req: Request, res: Response): Promise<{
+    logout(req: Request): Promise<{
         success: boolean;
         message: string;
     }>;

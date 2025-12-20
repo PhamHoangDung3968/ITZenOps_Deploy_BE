@@ -14,12 +14,12 @@ const config_1 = require("@nestjs/config");
 const mongoose_1 = require("@nestjs/mongoose");
 const auth_service_1 = require("./auth.service");
 const auth_controller_1 = require("./auth.controller");
-const google_strategy_1 = require("./google.strategy");
 const jwt_strategy_1 = require("./strategies/jwt.strategy");
 const jwt_auth_guard_1 = require("./jwt-auth.guard");
 const user_schema_1 = require("../users/user.schema");
 const roles_module_1 = require("../roles/roles.module");
 const redis_module_1 = require("../redis/redis.module");
+const google_strategy_1 = require("./google.strategy");
 let AuthModule = class AuthModule {
 };
 exports.AuthModule = AuthModule;
@@ -27,10 +27,10 @@ exports.AuthModule = AuthModule = __decorate([
     (0, common_1.Module)({
         imports: [
             config_1.ConfigModule.forRoot({ isGlobal: true }),
-            passport_1.PassportModule,
+            passport_1.PassportModule.register({ defaultStrategy: 'jwt' }),
             jwt_1.JwtModule.register({
                 secret: process.env.JWT_SECRET,
-                signOptions: { expiresIn: '15m' },
+                signOptions: { expiresIn: '1d' },
             }),
             mongoose_1.MongooseModule.forFeature([{ name: user_schema_1.User.name, schema: user_schema_1.UserSchema }]),
             roles_module_1.RolesModule,
@@ -38,9 +38,9 @@ exports.AuthModule = AuthModule = __decorate([
         ],
         providers: [
             auth_service_1.AuthService,
-            google_strategy_1.GoogleStrategy,
             jwt_strategy_1.JwtStrategy,
             jwt_auth_guard_1.JwtAuthGuard,
+            google_strategy_1.GoogleStrategy,
         ],
         controllers: [auth_controller_1.AuthController],
         exports: [jwt_auth_guard_1.JwtAuthGuard],

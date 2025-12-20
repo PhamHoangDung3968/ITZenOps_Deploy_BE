@@ -14,17 +14,30 @@ const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const passport_jwt_1 = require("passport-jwt");
 const config_1 = require("@nestjs/config");
+const auth_service_1 = require("../auth.service");
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy) {
     configService;
-    constructor(configService) {
+    authService;
+    constructor(configService, authService) {
         super({
             jwtFromRequest: passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken(),
             ignoreExpiration: false,
             secretOrKey: configService.get('JWT_SECRET') || '',
+            passReqToCallback: true,
         });
         this.configService = configService;
+        this.authService = authService;
     }
-    async validate(payload) {
+    async validate(req, payload) {
+        const token = passport_jwt_1.ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+        if (!token)
+            throw new common_1.UnauthorizedException('Token không tồn tại');
+        if (await this.authService.isAccessTokenBlacklisted(token)) {
+            throw new common_1.UnauthorizedException('Token đã bị thu hồi');
+        }
+        if (!(await this.authService.isAccessTokenWhitelisted(token))) {
+            throw new common_1.UnauthorizedException('Token không nằm trong whitelist');
+        }
         return {
             userId: payload._id,
             email: payload.email,
@@ -38,6 +51,7 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
 exports.JwtStrategy = JwtStrategy;
 exports.JwtStrategy = JwtStrategy = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [config_1.ConfigService])
+    __metadata("design:paramtypes", [config_1.ConfigService,
+        auth_service_1.AuthService])
 ], JwtStrategy);
 //# sourceMappingURL=jwt.strategy.js.map

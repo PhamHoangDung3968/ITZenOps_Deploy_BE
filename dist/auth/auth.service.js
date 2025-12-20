@@ -64,16 +64,13 @@ let AuthService = class AuthService {
     }
     async validateUser(username, password) {
         const user = await this.userModel.findOne({ username });
-        if (!user) {
+        if (!user)
             throw new common_1.UnauthorizedException('Tài khoản không tồn tại');
-        }
-        if (!user.password) {
+        if (!user.password)
             throw new common_1.UnauthorizedException('Tài khoản không có mật khẩu');
-        }
         const isValid = await argon2.verify(user.password, password);
-        if (!isValid) {
+        if (!isValid)
             throw new common_1.UnauthorizedException('Sai mật khẩu');
-        }
         const allowedRoleId = '690ac7fd9504cedae759735e';
         if (String(user.roleId) !== allowedRoleId) {
             throw new common_1.UnauthorizedException('Không có quyền đăng nhập bằng tài khoản thường');
@@ -139,6 +136,32 @@ let AuthService = class AuthService {
         catch (e) {
             throw new common_1.UnauthorizedException('Refresh Token không hợp lệ hoặc đã hết hạn');
         }
+    }
+    async blacklistAccessToken(token) {
+        const decoded = this.jwtService.decode(token);
+        if (!decoded?.exp)
+            return;
+        const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+        const redis = this.redisService.getClient();
+        await redis.set(`blacklist:${token}`, 'true', 'EX', ttl);
+    }
+    async whitelistAccessToken(token) {
+        const decoded = this.jwtService.decode(token);
+        if (!decoded?.exp)
+            return;
+        const ttl = decoded.exp - Math.floor(Date.now() / 1000);
+        const redis = this.redisService.getClient();
+        await redis.set(`whitelist:${token}`, 'true', 'EX', ttl);
+    }
+    async isAccessTokenBlacklisted(token) {
+        const redis = this.redisService.getClient();
+        const result = await redis.get(`blacklist:${token}`);
+        return result === 'true';
+    }
+    async isAccessTokenWhitelisted(token) {
+        const redis = this.redisService.getClient();
+        const result = await redis.get(`whitelist:${token}`);
+        return result === 'true';
     }
 };
 exports.AuthService = AuthService;

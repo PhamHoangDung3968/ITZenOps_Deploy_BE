@@ -36,6 +36,35 @@ let UsersController = class UsersController {
         const userId = req.user.userId;
         return this.usersService.updateProfile(userId, body);
     }
+    async findOne(id) {
+        return this.usersService.getUserById(id);
+    }
+    async updateUser(id, updates) {
+        return this.usersService.updateUser(id, updates);
+    }
+    async updateUserRole(id, roleId) {
+        return this.usersService.updateUserRole(id, roleId);
+    }
+    async updateSex(id, sex) {
+        return this.usersService.updateSex(id, sex);
+    }
+    async updateStatus(id, status) {
+        return this.usersService.updateStatus(id, status);
+    }
+    async createManualUser(data) {
+        try {
+            return await this.usersService.createManualUser(data);
+        }
+        catch (error) {
+            if (error.code === 11000 || error.code === 11001) {
+                throw new common_1.ConflictException('Email này đã tồn tại trong hệ thống. Vui lòng nhập email khác!');
+            }
+            throw new common_1.BadRequestException('Không thể tạo người dùng. Vui lòng kiểm tra lại dữ liệu!');
+        }
+    }
+    async deleteUser(id) {
+        return this.usersService.deleteUser(id);
+    }
 };
 exports.UsersController = UsersController;
 __decorate([
@@ -60,6 +89,66 @@ __decorate([
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
 ], UsersController.prototype, "updateProfile", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Get)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "findOne", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Put)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "updateUser", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Put)(':id/role'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)('roleId')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "updateUserRole", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Put)(':id/sex'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)('sex')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "updateSex", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Put)(':id/status'),
+    __param(0, (0, common_1.Param)('id')),
+    __param(1, (0, common_1.Body)('status')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Number]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "updateStatus", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Post)('manual'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "createManualUser", null);
+__decorate([
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    (0, common_1.Delete)(':id'),
+    __param(0, (0, common_1.Param)('id')),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String]),
+    __metadata("design:returntype", Promise)
+], UsersController.prototype, "deleteUser", null);
 exports.UsersController = UsersController = __decorate([
     (0, common_1.Controller)('users'),
     __metadata("design:paramtypes", [users_service_1.UsersService])

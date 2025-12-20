@@ -24,12 +24,8 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     });
   }
 
-  async validate(
-    accessToken: string,
-    refreshToken: string,
-    profile: any,
-  ): Promise<any> {
-    const { name, emails, id, displayName } = profile;
+  async validate(accessToken: string, refreshToken: string, profile: any): Promise<any> {
+    const { emails, id, displayName } = profile;
     const email = emails[0].value;
 
     let user = await this.userModel.findOne({ email });
@@ -43,7 +39,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
     if (!user) {
       user = new this.userModel({
-        name: name?.givenName || displayName,
+        name: displayName,
         email,
         username: generatedUsername,
         password: hashedPassword,
@@ -59,33 +55,31 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
 
       await user.save();
 
-      if (String(defaultRoleId) === specialRoleId) {
+      // gửi email lần đầu nếu role đặc biệt
+      if (String(user.roleId) === specialRoleId) {
         await this.mailerService.sendMail({
           to: email,
           subject: 'Thông tin đăng nhập ITZenOps',
           text: `Xin chào ${user.name},\n\nTài khoản của bạn đã được tạo:\n\nUsername: ${generatedUsername}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
         });
-
         user.emailSent = true;
         await user.save();
       }
     } else {
       user.lastLogin = new Date();
-
-      if (String(user.roleId) === specialRoleId && user.emailSent !== true) {
-        await this.mailerService.sendMail({
-          to: email,
-          subject: 'Thông tin đăng nhập ITZenOps',
-          text: `Xin chào ${user.name},\n\nTài khoản của bạn đã được cập nhật:\n\nUsername: ${user.username}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
-        });
-
-        user.password = hashedPassword;
-        user.emailSent = true;
-      }
-
       await user.save();
     }
 
-    return user;
+    // Trả về payload an toàn
+    return {
+      _id: String(user._id),
+      username: user.username,
+      email: user.email,
+      name: user.name,
+      roleId: String(user.roleId),
+      sex: user.sex,
+      dayOfBirth: user.dayOfBirth,
+      lastLogin: user.lastLogin,
+    };
   }
 }

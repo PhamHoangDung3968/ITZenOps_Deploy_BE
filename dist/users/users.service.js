@@ -70,6 +70,53 @@ let UsersService = class UsersService {
         }
         return updatedUser;
     }
+    async getUserById(userId) {
+        return this.userModel.findById(userId).exec();
+    }
+    async updateUserRole(userId, roleId) {
+        const updatedUser = await this.userModel.findByIdAndUpdate(userId, { roleId: new mongoose_2.Types.ObjectId(roleId) }, { new: true }).exec();
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+        return updatedUser;
+    }
+    async updateSex(userId, sex) {
+        const updatedUser = await this.userModel.findByIdAndUpdate(userId, { sex }, { new: true }).exec();
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+        return updatedUser;
+    }
+    async updateStatus(userId, status) {
+        const updatedUser = await this.userModel.findByIdAndUpdate(userId, { status }, { new: true }).exec();
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+        return updatedUser;
+    }
+    async updateUser(userId, updates) {
+        delete updates.email;
+        const updatedUser = await this.userModel.findByIdAndUpdate(userId, updates, { new: true }).exec();
+        if (!updatedUser) {
+            throw new Error('User not found');
+        }
+        return updatedUser;
+    }
+    async createManualUser(data) {
+        const newUser = new this.userModel({
+            ...data,
+            status: data.status ?? 1,
+            lastLogin: null,
+            emailSent: false,
+        });
+        return newUser.save();
+    }
+    async deleteUser(userId) {
+        const result = await this.userModel.findByIdAndDelete(userId).exec();
+        if (!result) {
+            throw new common_1.NotFoundException(`Không tìm thấy người dùng với ID: ${userId}`);
+        }
+    }
 };
 exports.UsersService = UsersService;
 exports.UsersService = UsersService = __decorate([

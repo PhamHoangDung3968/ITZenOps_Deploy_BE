@@ -14,117 +14,82 @@ var __param = (this && this.__param) || function (paramIndex, decorator) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthController = void 0;
 const common_1 = require("@nestjs/common");
-const passport_1 = require("@nestjs/passport");
 const auth_service_1 = require("./auth.service");
 const jwt_auth_guard_1 = require("./jwt-auth.guard");
 const public_decorator_1 = require("./decorators/public.decorator");
-const config_1 = require("@nestjs/config");
+const passport_1 = require("@nestjs/passport");
 let AuthController = class AuthController {
     authService;
-    configService;
-    constructor(authService, configService) {
+    constructor(authService) {
         this.authService = authService;
-        this.configService = configService;
     }
-    setRefreshTokenCookie(res, refreshToken) {
-        const secure = this.configService.get('NODE_ENV') === 'production';
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            secure,
-            sameSite: 'strict',
-            path: '/',
-            expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        });
-    }
-    async googleAuth() { }
-    async googleAuthRedirect(req, res) {
-        const user = req.user;
-        if (!user)
-            return res.status(400).send('User not found');
-        const tokenUser = {
-            _id: String(user._id),
-            email: user.email,
-            name: user.name,
-            roleId: String(user.roleId),
-            sex: user.sex,
-            dayOfBirth: user.dayOfBirth,
-        };
-        const { accessToken, refreshToken } = await this.authService.getTokens(tokenUser);
-        await this.authService.updateRefreshToken(String(user._id), refreshToken);
-        const html = `
-      <script>
-        window.opener.postMessage({
-          accessToken: '${accessToken}',
-          refreshToken: '${refreshToken}',
-          username: '${user.name}',
-          email: '${user.email}',
-          roleId: '${user.roleId ?? ''}'
-        }, 'http://localhost:3001');
-        window.close();
-      </script>
-    `;
-        res.send(html);
-    }
-    async login(body, res) {
+    async login(body) {
         const user = await this.authService.validateUser(body.username, body.password);
-        const tokenUser = {
-            _id: String(user._id),
-            email: user.email,
-            name: user.name,
-            roleId: String(user.roleId),
-            sex: user.sex,
-            dayOfBirth: user.dayOfBirth,
-        };
-        const { accessToken, refreshToken } = await this.authService.getTokens(tokenUser);
-        await this.authService.updateRefreshToken(String(user._id), refreshToken);
-        this.setRefreshTokenCookie(res, refreshToken);
+        const { accessToken, refreshToken } = await this.authService.getTokens(user);
+        await this.authService.updateRefreshToken(user._id, refreshToken);
+        await this.authService.whitelistAccessToken(accessToken);
         return {
             message: 'Đăng nhập thành công',
             accessToken,
+            refreshToken,
             user,
         };
     }
-    async refreshTokens(req, res) {
-        const refreshToken = req.cookies['refreshToken'];
-        if (!refreshToken)
+    async googleAuth() {
+    }
+    async googleCallback(req, res) {
+        const user = req.user;
+        const { accessToken, refreshToken } = await this.authService.getTokens(user);
+        await this.authService.updateRefreshToken(user._id, refreshToken);
+        await this.authService.whitelistAccessToken(accessToken);
+        const payload = { accessToken, refreshToken, username: user.name || user.email };
+        res.send(`
+      <script>
+        window.opener && window.opener.postMessage(${JSON.stringify(payload)}, '*');
+        window.close();
+      </script>
+    `);
+    }
+    async refresh(body) {
+        if (!body.refreshToken)
             throw new common_1.UnauthorizedException('Missing Refresh Token');
-        try {
-            const payload = await this.authService.verifyRefreshToken(refreshToken);
-            const userId = payload.userId;
-            const storedToken = await this.authService.getStoredRefreshToken(userId);
-            if (!storedToken || storedToken !== refreshToken) {
-                res.clearCookie('refreshToken');
-                throw new common_1.UnauthorizedException('Refresh Token không hợp lệ hoặc đã bị thu hồi');
-            }
-            const user = await this.authService.validateUserById(userId);
-            const { accessToken, refreshToken: newRefreshToken } = await this.authService.getTokens(user);
-            await this.authService.updateRefreshToken(userId, newRefreshToken);
-            this.setRefreshTokenCookie(res, newRefreshToken);
-            return { accessToken };
+        const payload = await this.authService.verifyRefreshToken(body.refreshToken);
+        const userId = payload.userId;
+        const storedToken = await this.authService.getStoredRefreshToken(userId);
+        if (!storedToken || storedToken !== body.refreshToken) {
+            throw new common_1.UnauthorizedException('Refresh Token không hợp lệ hoặc đã bị thu hồi');
         }
-        catch (e) {
-            res.clearCookie('refreshToken');
-            throw new common_1.UnauthorizedException('Refresh Token không hợp lệ');
-        }
+        const user = await this.authService.validateUserById(userId);
+        const { accessToken, refreshToken: newRefreshToken } = await this.authService.getTokens(user);
+        await this.authService.updateRefreshToken(userId, newRefreshToken);
+        await this.authService.whitelistAccessToken(accessToken);
+        return { accessToken, refreshToken: newRefreshToken };
     }
     verify(req) {
         if (!req.user)
             throw new common_1.UnauthorizedException('User not authenticated');
-        return {
-            authenticated: true,
-            user: req.user,
-        };
+        return { authenticated: true, user: req.user };
     }
-    async logout(req, res) {
+    async logout(req) {
         if (!req.user)
             throw new common_1.UnauthorizedException('User not authenticated');
-        const userId = req.user.userId;
+        const userId = req.user._id;
         await this.authService.removeRefreshToken(userId);
-        res.clearCookie('refreshToken');
+        const accessToken = req.headers.authorization?.split(' ')[1];
+        if (accessToken)
+            await this.authService.blacklistAccessToken(accessToken);
         return { success: true, message: 'Đăng xuất thành công' };
     }
 };
 exports.AuthController = AuthController;
+__decorate([
+    (0, public_decorator_1.Public)(),
+    (0, common_1.Post)('login'),
+    __param(0, (0, common_1.Body)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object]),
+    __metadata("design:returntype", Promise)
+], AuthController.prototype, "login", null);
 __decorate([
     (0, public_decorator_1.Public)(),
     (0, common_1.Get)('google'),
@@ -134,6 +99,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "googleAuth", null);
 __decorate([
+    (0, public_decorator_1.Public)(),
     (0, common_1.Get)('google/callback'),
     (0, common_1.UseGuards)((0, passport_1.AuthGuard)('google')),
     __param(0, (0, common_1.Req)()),
@@ -141,25 +107,15 @@ __decorate([
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, Object]),
     __metadata("design:returntype", Promise)
-], AuthController.prototype, "googleAuthRedirect", null);
-__decorate([
-    (0, public_decorator_1.Public)(),
-    (0, common_1.Post)('login'),
-    __param(0, (0, common_1.Body)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
-    __metadata("design:returntype", Promise)
-], AuthController.prototype, "login", null);
+], AuthController.prototype, "googleCallback", null);
 __decorate([
     (0, public_decorator_1.Public)(),
     (0, common_1.Post)('refresh'),
-    __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
+    __param(0, (0, common_1.Body)()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
-], AuthController.prototype, "refreshTokens", null);
+], AuthController.prototype, "refresh", null);
 __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Get)('verify'),
@@ -172,14 +128,12 @@ __decorate([
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
     (0, common_1.Post)('logout'),
     __param(0, (0, common_1.Req)()),
-    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:paramtypes", [Object]),
     __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logout", null);
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
-    __metadata("design:paramtypes", [auth_service_1.AuthService,
-        config_1.ConfigService])
+    __metadata("design:paramtypes", [auth_service_1.AuthService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

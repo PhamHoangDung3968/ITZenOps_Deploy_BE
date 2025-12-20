@@ -13,10 +13,10 @@ export class User {
   email: string;
 
   @Prop({ type: String, required: false })
-  username?: string; // ✅ Thêm username
+  username?: string;
 
   @Prop({ type: String, required: false })
-  password?: string; // ✅ Thêm password (đã hash)
+  password?: string;
   
   @Prop({ default: false })
   emailSent: boolean;

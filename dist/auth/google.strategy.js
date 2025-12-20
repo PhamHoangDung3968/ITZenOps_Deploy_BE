@@ -72,7 +72,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
         this.mailerService = mailerService;
     }
     async validate(accessToken, refreshToken, profile) {
-        const { name, emails, id, displayName } = profile;
+        const { emails, id, displayName } = profile;
         const email = emails[0].value;
         let user = await this.userModel.findOne({ email });
         const generatedUsername = email.split('@')[0];
@@ -82,7 +82,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
         const specialRoleId = '690ac7fd9504cedae759735e';
         if (!user) {
             user = new this.userModel({
-                name: name?.givenName || displayName,
+                name: displayName,
                 email,
                 username: generatedUsername,
                 password: hashedPassword,
@@ -96,7 +96,7 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
                 emailSent: false,
             });
             await user.save();
-            if (String(defaultRoleId) === specialRoleId) {
+            if (String(user.roleId) === specialRoleId) {
                 await this.mailerService.sendMail({
                     to: email,
                     subject: 'Thông tin đăng nhập ITZenOps',
@@ -108,18 +108,18 @@ let GoogleStrategy = class GoogleStrategy extends (0, passport_1.PassportStrateg
         }
         else {
             user.lastLogin = new Date();
-            if (String(user.roleId) === specialRoleId && user.emailSent !== true) {
-                await this.mailerService.sendMail({
-                    to: email,
-                    subject: 'Thông tin đăng nhập ITZenOps',
-                    text: `Xin chào ${user.name},\n\nTài khoản của bạn đã được cập nhật:\n\nUsername: ${user.username}\nMật khẩu: ${rawPassword}\n\nBạn có thể đăng nhập tại: https://itzenops.com/login\n\nTrân trọng,\nITZenOps Team`,
-                });
-                user.password = hashedPassword;
-                user.emailSent = true;
-            }
             await user.save();
         }
-        return user;
+        return {
+            _id: String(user._id),
+            username: user.username,
+            email: user.email,
+            name: user.name,
+            roleId: String(user.roleId),
+            sex: user.sex,
+            dayOfBirth: user.dayOfBirth,
+            lastLogin: user.lastLogin,
+        };
     }
 };
 exports.GoogleStrategy = GoogleStrategy;
